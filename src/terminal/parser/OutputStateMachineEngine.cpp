@@ -318,7 +318,7 @@ bool OutputStateMachineEngine::ActionEscDispatch(const wchar_t wch,
 // - true iff we successfully dispatched the sequence.
 bool OutputStateMachineEngine::ActionVt52EscDispatch(const wchar_t wch,
                                                      const gsl::span<const wchar_t> intermediates,
-                                                     const gsl::span<const size_t> parameters)
+                                                     const til::clump_view<size_t> parameters)
 {
     bool success = false;
 
@@ -357,11 +357,14 @@ bool OutputStateMachineEngine::ActionVt52EscDispatch(const wchar_t wch,
         case Vt52ActionCodes::EraseToEndOfLine:
             success = _dispatch->EraseInLine(DispatchTypes::EraseType::ToEnd);
             break;
-        case Vt52ActionCodes::DirectCursorAddress:
+        case Vt52ActionCodes::DirectCursorAddress: {
             // VT52 cursor addresses are provided as ASCII characters, with
             // the lowest value being a space, representing an address of 1.
-            success = _dispatch->CursorPosition(gsl::at(parameters, 0) - ' ' + 1, gsl::at(parameters, 1) - ' ' + 1);
+            const auto x{ gsl::at(gsl::at(parameters, 0), 0) };
+            const auto y{ gsl::at(gsl::at(parameters, 1), 0) };
+            success = _dispatch->CursorPosition(x - ' ' + 1, y - ' ' + 1);
             break;
+        }
         case Vt52ActionCodes::Identify:
             success = _dispatch->Vt52DeviceAttributes();
             break;
@@ -371,8 +374,7 @@ bool OutputStateMachineEngine::ActionVt52EscDispatch(const wchar_t wch,
         case Vt52ActionCodes::ExitAlternateKeypadMode:
             success = _dispatch->SetKeypadMode(false);
             break;
-        case Vt52ActionCodes::ExitVt52Mode:
-        {
+        case Vt52ActionCodes::ExitVt52Mode: {
             const DispatchTypes::PrivateModeParams mode[] = { DispatchTypes::PrivateModeParams::DECANM_AnsiMode };
             success = _dispatch->SetPrivateModes(mode);
             break;
@@ -452,7 +454,7 @@ bool OutputStateMachineEngine::_IntermediateScsDispatch(const wchar_t wch,
 // - true iff we successfully dispatched the sequence.
 bool OutputStateMachineEngine::ActionCsiDispatch(const wchar_t wch,
                                                  const gsl::span<const wchar_t> intermediates,
-                                                 gsl::span<const size_t> parameters)
+                                                 til::clump_view<size_t> parameters)
 {
     bool success = false;
     size_t distance = 0;
@@ -470,7 +472,7 @@ bool OutputStateMachineEngine::ActionCsiDispatch(const wchar_t wch,
     DispatchTypes::AnsiStatusType deviceStatusType = static_cast<DispatchTypes::AnsiStatusType>(0); // there is no default status type.
     size_t repeatCount = 0;
     // This is all the args after the first arg, and the count of args not including the first one.
-    const auto remainingParams = parameters.size() > 1 ? parameters.subspan(1) : gsl::span<const size_t>{};
+    const auto remainingParams = parameters.size() > 1 ? parameters.subview(1) : til::clump_view<size_t>{};
 
     if (intermediates.empty())
     {
@@ -616,7 +618,10 @@ bool OutputStateMachineEngine::ActionCsiDispatch(const wchar_t wch,
                 TermTelemetry::Instance().Log(TermTelemetry::Codes::EL);
                 break;
             case VTActionCodes::SGR_SetGraphicsRendition:
-                success = _dispatch->SetGraphicsRendition({ _graphicsOptions.data(), _graphicsOptions.size() });
+                for (const auto& gr : _graphicsOptions)
+                {
+                    success = success && _dispatch->SetGraphicsRendition(gr);
+                }
                 TermTelemetry::Instance().Log(TermTelemetry::Codes::SGR);
                 break;
             case VTActionCodes::DSR_DeviceStatusReport:
@@ -669,7 +674,7 @@ bool OutputStateMachineEngine::ActionCsiDispatch(const wchar_t wch,
                 break;
             case VTActionCodes::DTTERM_WindowManipulation:
                 success = _dispatch->WindowManipulation(static_cast<DispatchTypes::WindowManipulationType>(function),
-                                                        remainingParams);
+                                                        remainingParams.flat_view());
                 TermTelemetry::Instance().Log(TermTelemetry::Codes::DTTERM_WM);
                 break;
             case VTActionCodes::REP_RepeatCharacter:
@@ -737,7 +742,7 @@ bool OutputStateMachineEngine::ActionCsiDispatch(const wchar_t wch,
 // Return Value:
 // - True if handled successfully. False otherwise.
 bool OutputStateMachineEngine::_IntermediateQuestionMarkDispatch(const wchar_t wchAction,
-                                                                 const gsl::span<const size_t> parameters)
+                                                                 const til::clump_view<size_t> parameters)
 {
     bool success = false;
 
@@ -787,7 +792,7 @@ bool OutputStateMachineEngine::_IntermediateQuestionMarkDispatch(const wchar_t w
 // - True if handled successfully. False otherwise.
 bool OutputStateMachineEngine::_IntermediateGreaterThanOrEqualDispatch(const wchar_t wch,
                                                                        const wchar_t intermediate,
-                                                                       const gsl::span<const size_t> parameters)
+                                                                       const til::clump_view<size_t> parameters)
 {
     bool success = false;
 
@@ -846,7 +851,7 @@ bool OutputStateMachineEngine::_IntermediateExclamationDispatch(const wchar_t wc
 // Return Value:
 // - True if handled successfully. False otherwise.
 bool OutputStateMachineEngine::_IntermediateSpaceDispatch(const wchar_t wchAction,
-                                                          const gsl::span<const size_t> parameters)
+                                                          const til::clump_view<size_t> parameters)
 {
     bool success = false;
     DispatchTypes::CursorStyle cursorStyle = DefaultCursorStyle;
@@ -1022,7 +1027,7 @@ bool OutputStateMachineEngine::ActionOscDispatch(const wchar_t /*wch*/,
 // Return Value:
 // - true iff we successfully dispatched the sequence.
 bool OutputStateMachineEngine::ActionSs3Dispatch(const wchar_t /*wch*/,
-                                                 const gsl::span<const size_t> /*parameters*/) noexcept
+                                                 const til::clump_view<size_t> /*parameters*/) noexcept
 {
     // The output engine doesn't handle any SS3 sequences.
     _ClearLastChar();
@@ -1036,8 +1041,8 @@ bool OutputStateMachineEngine::ActionSs3Dispatch(const wchar_t /*wch*/,
 // - options - Space that will be filled with valid options from the GraphicsOptions enum
 // Return Value:
 // - True if we successfully retrieved an array of valid graphics options from the parameters we've stored. False otherwise.
-bool OutputStateMachineEngine::_GetGraphicsOptions(const gsl::span<const size_t> parameters,
-                                                   std::vector<DispatchTypes::GraphicsOptions>& options) const
+bool OutputStateMachineEngine::_GetGraphicsOptions(const til::clump_view<size_t> parameters,
+                                                   til::clump<DispatchTypes::GraphicsOptions>& options) const
 {
     bool success = false;
 
@@ -1048,9 +1053,15 @@ bool OutputStateMachineEngine::_GetGraphicsOptions(const gsl::span<const size_t>
     }
     else
     {
-        for (const auto& p : parameters)
+        for (auto pi{ parameters.begin() }; pi != parameters.end(); )
         {
-            options.push_back((DispatchTypes::GraphicsOptions)p);
+            const auto fval{ (DispatchTypes::GraphicsOptions)til::at(*pi, 0) };
+            options.push_back(fval);
+            for (auto v : pi->subspan(1))
+            {
+                options.push_glom((DispatchTypes::GraphicsOptions)v);
+            }
+            ++pi;
         }
         success = true;
     }
@@ -1072,7 +1083,7 @@ bool OutputStateMachineEngine::_GetGraphicsOptions(const gsl::span<const size_t>
 // - eraseType - Receives the erase type parameter
 // Return Value:
 // - True if we successfully pulled an erase type from the parameters we've stored. False otherwise.
-bool OutputStateMachineEngine::_GetEraseOperation(const gsl::span<const size_t> parameters,
+bool OutputStateMachineEngine::_GetEraseOperation(const til::clump_view<size_t> parameters,
                                                   DispatchTypes::EraseType& eraseType) const noexcept
 {
     bool success = false; // If we have too many parameters or don't know what to do with the given value, return false.
@@ -1087,7 +1098,7 @@ bool OutputStateMachineEngine::_GetEraseOperation(const gsl::span<const size_t> 
     else if (parameters.size() == 1)
     {
         // If there's one parameter, attempt to match it to the values we accept.
-        const auto param = static_cast<DispatchTypes::EraseType>(til::at(parameters, 0));
+        const auto param = static_cast<DispatchTypes::EraseType>(til::at(*parameters.begin(), 0));
 
         switch (param)
         {
@@ -1111,7 +1122,7 @@ bool OutputStateMachineEngine::_GetEraseOperation(const gsl::span<const size_t> 
 // - distance - Receives the distance
 // Return Value:
 // - True if we successfully pulled the cursor distance from the parameters we've stored. False otherwise.
-bool OutputStateMachineEngine::_GetCursorDistance(const gsl::span<const size_t> parameters,
+bool OutputStateMachineEngine::_GetCursorDistance(const til::clump_view<size_t> parameters,
                                                   size_t& distance) const noexcept
 {
     bool success = false;
@@ -1125,7 +1136,7 @@ bool OutputStateMachineEngine::_GetCursorDistance(const gsl::span<const size_t> 
     else if (parameters.size() == 1)
     {
         // If there's one parameter, use it.
-        distance = til::at(parameters, 0);
+        distance = til::at(*parameters.begin(), 0);
         success = true;
     }
 
@@ -1145,7 +1156,7 @@ bool OutputStateMachineEngine::_GetCursorDistance(const gsl::span<const size_t> 
 // - distance - Receives the distance
 // Return Value:
 // - True if we successfully pulled the scroll distance from the parameters we've stored. False otherwise.
-bool OutputStateMachineEngine::_GetScrollDistance(const gsl::span<const size_t> parameters,
+bool OutputStateMachineEngine::_GetScrollDistance(const til::clump_view<size_t> parameters,
                                                   size_t& distance) const noexcept
 {
     bool success = false;
@@ -1159,7 +1170,7 @@ bool OutputStateMachineEngine::_GetScrollDistance(const gsl::span<const size_t> 
     else if (parameters.size() == 1)
     {
         // If there's one parameter, use it.
-        distance = til::at(parameters, 0);
+        distance = til::at(*parameters.begin(), 0);
         success = true;
     }
 
@@ -1179,7 +1190,7 @@ bool OutputStateMachineEngine::_GetScrollDistance(const gsl::span<const size_t> 
 // - consoleWidth - Receives the width
 // Return Value:
 // - True if we successfully pulled the width from the parameters we've stored. False otherwise.
-bool OutputStateMachineEngine::_GetConsoleWidth(const gsl::span<const size_t> parameters,
+bool OutputStateMachineEngine::_GetConsoleWidth(const til::clump_view<size_t> parameters,
                                                 size_t& consoleWidth) const noexcept
 {
     bool success = false;
@@ -1193,7 +1204,7 @@ bool OutputStateMachineEngine::_GetConsoleWidth(const gsl::span<const size_t> pa
     else if (parameters.size() == 1)
     {
         // If there's one parameter, use it.
-        consoleWidth = til::at(parameters, 0);
+        consoleWidth = til::at(*parameters.begin(), 0);
         success = true;
     }
 
@@ -1214,7 +1225,7 @@ bool OutputStateMachineEngine::_GetConsoleWidth(const gsl::span<const size_t> pa
 // - column - Receives the X/Column position
 // Return Value:
 // - True if we successfully pulled the cursor coordinates from the parameters we've stored. False otherwise.
-bool OutputStateMachineEngine::_GetXYPosition(const gsl::span<const size_t> parameters,
+bool OutputStateMachineEngine::_GetXYPosition(const til::clump_view<size_t> parameters,
                                               size_t& line,
                                               size_t& column) const noexcept
 {
@@ -1230,14 +1241,14 @@ bool OutputStateMachineEngine::_GetXYPosition(const gsl::span<const size_t> para
     else if (parameters.size() == 1)
     {
         // If there's only one param, leave the default for the column, and retrieve the specified row.
-        line = til::at(parameters, 0);
+        line = til::at(*parameters.begin(), 0);
         success = true;
     }
     else if (parameters.size() == 2)
     {
         // If there are exactly two parameters, use them.
-        line = til::at(parameters, 0);
-        column = til::at(parameters, 1);
+        line = til::at(*parameters.begin(), 0);
+        column = til::at(*(parameters.begin()++), 0);
         success = true;
     }
 
@@ -1263,7 +1274,7 @@ bool OutputStateMachineEngine::_GetXYPosition(const gsl::span<const size_t> para
 // - bottomMargin - Receives the bottom margin
 // Return Value:
 // - True if we successfully pulled the margin settings from the parameters we've stored. False otherwise.
-bool OutputStateMachineEngine::_GetTopBottomMargins(const gsl::span<const size_t> parameters,
+bool OutputStateMachineEngine::_GetTopBottomMargins(const til::clump_view<size_t> parameters,
                                                     size_t& topMargin,
                                                     size_t& bottomMargin) const noexcept
 {
@@ -1284,14 +1295,14 @@ bool OutputStateMachineEngine::_GetTopBottomMargins(const gsl::span<const size_t
     }
     else if (parameters.size() == 1)
     {
-        topMargin = til::at(parameters, 0);
+        topMargin = til::at(*(parameters.begin()), 0);
         success = true;
     }
     else if (parameters.size() == 2)
     {
         // If there are exactly two parameters, use them.
-        topMargin = til::at(parameters, 0);
-        bottomMargin = til::at(parameters, 1);
+        topMargin = til::at(*(parameters.begin()), 0);
+        bottomMargin = til::at(*(parameters.begin()++), 0);
         success = true;
     }
 
@@ -1308,7 +1319,7 @@ bool OutputStateMachineEngine::_GetTopBottomMargins(const gsl::span<const size_t
 // - statusType - Receives the Status Type parameter
 // Return Value:
 // - True if we successfully found a device operation in the parameters stored. False otherwise.
-bool OutputStateMachineEngine::_GetDeviceStatusOperation(const gsl::span<const size_t> parameters,
+bool OutputStateMachineEngine::_GetDeviceStatusOperation(const til::clump_view<size_t> parameters,
                                                          DispatchTypes::AnsiStatusType& statusType) const noexcept
 {
     bool success = false;
@@ -1317,7 +1328,7 @@ bool OutputStateMachineEngine::_GetDeviceStatusOperation(const gsl::span<const s
     if (parameters.size() == 1)
     {
         // If there's one parameter, attempt to match it to the values we accept.
-        const auto param = til::at(parameters, 0);
+        const auto param = til::at(*parameters.begin(), 0);
 
         switch (param)
         {
@@ -1343,7 +1354,7 @@ bool OutputStateMachineEngine::_GetDeviceStatusOperation(const gsl::span<const s
 // - privateModes - Space that will be filled with valid params from the PrivateModeParams enum
 // Return Value:
 // - True if we successfully retrieved an array of private mode params from the parameters we've stored. False otherwise.
-bool OutputStateMachineEngine::_GetPrivateModeParams(const gsl::span<const size_t> parameters,
+bool OutputStateMachineEngine::_GetPrivateModeParams(const til::clump_view<size_t> parameters,
                                                      std::vector<DispatchTypes::PrivateModeParams>& privateModes) const
 {
     bool success = false;
@@ -1352,7 +1363,7 @@ bool OutputStateMachineEngine::_GetPrivateModeParams(const gsl::span<const size_
     {
         for (const auto& p : parameters)
         {
-            privateModes.push_back((DispatchTypes::PrivateModeParams)p);
+            privateModes.push_back((DispatchTypes::PrivateModeParams)til::at(p, 0));
         }
         success = true;
     }
@@ -1364,7 +1375,7 @@ bool OutputStateMachineEngine::_GetPrivateModeParams(const gsl::span<const size_
 // - parameters - The parameters to parse
 // Return Value:
 // - True if there were no parameters. False otherwise.
-bool OutputStateMachineEngine::_VerifyHasNoParameters(const gsl::span<const size_t> parameters) const noexcept
+bool OutputStateMachineEngine::_VerifyHasNoParameters(const til::clump_view<size_t> parameters) const noexcept
 {
     return parameters.empty();
 }
@@ -1376,7 +1387,7 @@ bool OutputStateMachineEngine::_VerifyHasNoParameters(const gsl::span<const size
 // - parameters - The parameters to parse
 // Return Value:
 // - True if the DA params were valid. False otherwise.
-bool OutputStateMachineEngine::_VerifyDeviceAttributesParams(const gsl::span<const size_t> parameters) const noexcept
+bool OutputStateMachineEngine::_VerifyDeviceAttributesParams(const til::clump_view<size_t> parameters) const noexcept
 {
     bool success = false;
 
@@ -1386,7 +1397,7 @@ bool OutputStateMachineEngine::_VerifyDeviceAttributesParams(const gsl::span<con
     }
     else if (parameters.size() == 1)
     {
-        if (til::at(parameters, 0) == 0)
+        if (til::at(*parameters.begin(), 0) == 0)
         {
             success = true;
         }
@@ -1417,7 +1428,7 @@ bool OutputStateMachineEngine::_GetOscTitle(const std::wstring_view string,
 // - distance - Receives the distance
 // Return Value:
 // - True if we successfully pulled the tab distance from the parameters we've stored. False otherwise.
-bool OutputStateMachineEngine::_GetTabDistance(const gsl::span<const size_t> parameters,
+bool OutputStateMachineEngine::_GetTabDistance(const til::clump_view<size_t> parameters,
                                                size_t& distance) const noexcept
 {
     bool success = false;
@@ -1431,7 +1442,7 @@ bool OutputStateMachineEngine::_GetTabDistance(const gsl::span<const size_t> par
     else if (parameters.size() == 1)
     {
         // If there's one parameter, use it.
-        distance = til::at(parameters, 0);
+        distance = til::at(*parameters.begin(), 0);
         success = true;
     }
 
@@ -1451,7 +1462,7 @@ bool OutputStateMachineEngine::_GetTabDistance(const gsl::span<const size_t> par
 // - clearType - Receives the clear type
 // Return Value:
 // - True if we successfully pulled the tab clear type from the parameters we've stored. False otherwise.
-bool OutputStateMachineEngine::_GetTabClearType(const gsl::span<const size_t> parameters,
+bool OutputStateMachineEngine::_GetTabClearType(const til::clump_view<size_t> parameters,
                                                 size_t& clearType) const noexcept
 {
     bool success = false;
@@ -1465,7 +1476,7 @@ bool OutputStateMachineEngine::_GetTabClearType(const gsl::span<const size_t> pa
     else if (parameters.size() == 1)
     {
         // If there's one parameter, use it.
-        clearType = til::at(parameters, 0);
+        clearType = til::at(*parameters.begin(), 0);
         success = true;
     }
     return success;
@@ -1803,7 +1814,7 @@ bool OutputStateMachineEngine::_GetOscSetColor(const std::wstring_view string,
 // - function - Receives the function type
 // Return Value:
 // - True iff we successfully pulled the function type from the parameters
-bool OutputStateMachineEngine::_GetWindowManipulationType(const gsl::span<const size_t> parameters,
+bool OutputStateMachineEngine::_GetWindowManipulationType(const til::clump_view<size_t> parameters,
                                                           unsigned int& function) const noexcept
 {
     bool success = false;
@@ -1811,7 +1822,7 @@ bool OutputStateMachineEngine::_GetWindowManipulationType(const gsl::span<const 
 
     if (parameters.size() > 0)
     {
-        switch (til::at(parameters, 0))
+        switch (til::at(*parameters.begin(), 0))
         {
         case DispatchTypes::WindowManipulationType::RefreshWindow:
             function = DispatchTypes::WindowManipulationType::RefreshWindow;
@@ -1837,7 +1848,7 @@ bool OutputStateMachineEngine::_GetWindowManipulationType(const gsl::span<const 
 // - cursorStyle - Receives the cursorStyle
 // Return Value:
 // - True if we successfully pulled the cursor style from the parameters we've stored. False otherwise.
-bool OutputStateMachineEngine::_GetCursorStyle(const gsl::span<const size_t> parameters,
+bool OutputStateMachineEngine::_GetCursorStyle(const til::clump_view<size_t> parameters,
                                                DispatchTypes::CursorStyle& cursorStyle) const noexcept
 {
     bool success = false;
@@ -1851,7 +1862,7 @@ bool OutputStateMachineEngine::_GetCursorStyle(const gsl::span<const size_t> par
     else if (parameters.size() == 1)
     {
         // If there's one parameter, use it.
-        cursorStyle = (DispatchTypes::CursorStyle)til::at(parameters, 0);
+        cursorStyle = (DispatchTypes::CursorStyle)til::at(*parameters.begin(), 0);
         success = true;
     }
 
@@ -1886,7 +1897,7 @@ void OutputStateMachineEngine::SetTerminalConnection(ITerminalOutputConnection* 
 // Return Value:
 // - True if we successfully pulled the repeat count from the parameters.
 //   False otherwise.
-bool OutputStateMachineEngine::_GetRepeatCount(gsl::span<const size_t> parameters,
+bool OutputStateMachineEngine::_GetRepeatCount(til::clump_view<size_t> parameters,
                                                size_t& repeatCount) const noexcept
 {
     bool success = false;
@@ -1900,7 +1911,7 @@ bool OutputStateMachineEngine::_GetRepeatCount(gsl::span<const size_t> parameter
     else if (parameters.size() == 1)
     {
         // If there's one parameter, use it.
-        repeatCount = til::at(parameters, 0);
+        repeatCount = til::at(*parameters.begin(), 0);
         success = true;
     }
 

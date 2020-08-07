@@ -124,7 +124,7 @@ namespace Microsoft::Console::VirtualTerminal
         std::wstring_view _run;
 
         std::vector<wchar_t> _intermediates;
-        std::vector<size_t> _parameters;
+        til::clump<size_t> _parameters;
 
         std::wstring _oscString;
         size_t _oscParameter;

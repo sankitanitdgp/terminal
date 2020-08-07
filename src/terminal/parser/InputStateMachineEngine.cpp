@@ -346,7 +346,7 @@ bool InputStateMachineEngine::ActionEscDispatch(const wchar_t wch,
 // - true iff we successfully dispatched the sequence.
 bool InputStateMachineEngine::ActionVt52EscDispatch(const wchar_t /*wch*/,
                                                     const gsl::span<const wchar_t> /*intermediates*/,
-                                                    const gsl::span<const size_t> /*parameters*/) noexcept
+                                                    const til::clump_view<size_t> /*parameters*/) noexcept
 {
     // VT52 escape sequences are not used in the input state machine.
     return false;
@@ -364,7 +364,7 @@ bool InputStateMachineEngine::ActionVt52EscDispatch(const wchar_t /*wch*/,
 // - true iff we successfully dispatched the sequence.
 bool InputStateMachineEngine::ActionCsiDispatch(const wchar_t wch,
                                                 const gsl::span<const wchar_t> intermediates,
-                                                const gsl::span<const size_t> parameters)
+                                                const til::clump_view<size_t> parameters)
 {
     const auto actionCode = static_cast<CsiActionCodes>(wch);
 
@@ -389,7 +389,7 @@ bool InputStateMachineEngine::ActionCsiDispatch(const wchar_t wch,
     KeyEvent key;
 
     // This is all the args after the first arg, and the count of args not including the first one.
-    const auto remainingArgs = parameters.size() > 1 ? parameters.subspan(1) : gsl::span<const size_t>{};
+    const auto remainingArgs = parameters.size() > 1 ? parameters.subview(1) : til::clump_view<size_t>{};
 
     bool success = false;
     // Handle intermediate characters, if any
@@ -493,7 +493,7 @@ bool InputStateMachineEngine::ActionCsiDispatch(const wchar_t wch,
             break;
         case CsiActionCodes::DTTERM_WindowManipulation:
             success = _pDispatch->WindowManipulation(static_cast<DispatchTypes::WindowManipulationType>(function),
-                                                     remainingArgs);
+                                                     *remainingArgs.begin());
             break;
         case CsiActionCodes::Win32KeyboardInput:
         {
@@ -522,7 +522,7 @@ bool InputStateMachineEngine::ActionCsiDispatch(const wchar_t wch,
 // Return Value:
 // - true iff we successfully dispatched the sequence.
 bool InputStateMachineEngine::ActionSs3Dispatch(const wchar_t wch,
-                                                const gsl::span<const size_t> /*parameters*/)
+                                                const til::clump_view<size_t> /*parameters*/)
 {
     if (_pDispatch->IsVtInputEnabled() && _pfnFlushToInputQueue)
     {
@@ -800,12 +800,12 @@ bool InputStateMachineEngine::_WriteMouseEvent(const size_t column, const size_t
 // - actionCode - the actionCode for the sequence we're operating on.
 // Return Value:
 // - the INPUT_RECORD compatible modifier state.
-DWORD InputStateMachineEngine::_GetCursorKeysModifierState(const gsl::span<const size_t> parameters, const CsiActionCodes actionCode) noexcept
+DWORD InputStateMachineEngine::_GetCursorKeysModifierState(const til::clump_view<size_t> parameters, const CsiActionCodes actionCode) noexcept
 {
     DWORD modifiers = 0;
     if (_IsModified(parameters.size()) && parameters.size() >= 2)
     {
-        modifiers = _GetModifier(til::at(parameters, 1));
+        modifiers = _GetModifier(til::at(*(parameters.begin()++), 0));
     }
 
     // Enhanced Keys (from https://docs.microsoft.com/en-us/windows/console/key-event-record-str):
@@ -829,12 +829,12 @@ DWORD InputStateMachineEngine::_GetCursorKeysModifierState(const gsl::span<const
 // - parameters - the set of parameters to get the modifier state from.
 // Return Value:
 // - the INPUT_RECORD compatible modifier state.
-DWORD InputStateMachineEngine::_GetGenericKeysModifierState(const gsl::span<const size_t> parameters) noexcept
+DWORD InputStateMachineEngine::_GetGenericKeysModifierState(const til::clump_view<size_t> parameters) noexcept
 {
     DWORD modifiers = 0;
     if (_IsModified(parameters.size()) && parameters.size() >= 2)
     {
-        modifiers = _GetModifier(til::at(parameters, 1));
+        modifiers = _GetModifier(til::at(*(parameters.begin()++), 0));
     }
 
     // Enhanced Keys (from https://docs.microsoft.com/en-us/windows/console/key-event-record-str):
@@ -842,7 +842,7 @@ DWORD InputStateMachineEngine::_GetGenericKeysModifierState(const gsl::span<cons
     //   HOME, END, PAGE UP, PAGE DOWN, and direction keys in the clusters to the left
     //   of the keypad; and the divide (/) and ENTER keys in the keypad.
     // This snippet detects the non-direction keys
-    const auto identifier = static_cast<GenericKeyIdentifiers>(til::at(parameters, 0));
+    const auto identifier = static_cast<GenericKeyIdentifiers>(til::at(*(parameters.begin()), 0));
     if (identifier <= GenericKeyIdentifiers::Next)
     {
         modifiers = WI_SetFlag(modifiers, ENHANCED_KEY);
@@ -858,7 +858,7 @@ DWORD InputStateMachineEngine::_GetGenericKeysModifierState(const gsl::span<cons
 // - parameters - the set of parameters to get the modifier state from.
 // Return Value:
 // - the INPUT_RECORD compatible modifier state.
-DWORD InputStateMachineEngine::_GetSGRMouseModifierState(const gsl::span<const size_t> parameters) noexcept
+DWORD InputStateMachineEngine::_GetSGRMouseModifierState(const til::clump_view<size_t> parameters) noexcept
 {
     DWORD modifiers = 0;
     if (parameters.size() == 3)
@@ -870,7 +870,7 @@ DWORD InputStateMachineEngine::_GetSGRMouseModifierState(const gsl::span<const s
         //   MMM - Control, Alt, Shift state (respectively)
         //   D - flag signifying a drag event
         // This retrieves the modifier state from bits [5..3] ('M' above)
-        const auto modifierParam = til::at(parameters, 0);
+        const auto modifierParam = til::at(*(parameters.begin()), 0);
         WI_SetFlagIf(modifiers, SHIFT_PRESSED, WI_IsFlagSet(modifierParam, CsiMouseModifierCodes::Shift));
         WI_SetFlagIf(modifiers, LEFT_ALT_PRESSED, WI_IsFlagSet(modifierParam, CsiMouseModifierCodes::Meta));
         WI_SetFlagIf(modifiers, LEFT_CTRL_PRESSED, WI_IsFlagSet(modifierParam, CsiMouseModifierCodes::Ctrl));
@@ -922,7 +922,7 @@ DWORD InputStateMachineEngine::_GetModifier(const size_t modifierParam) noexcept
 // Return Value:
 // true iff we were able to synthesize buttonState
 bool InputStateMachineEngine::_UpdateSGRMouseButtonState(const wchar_t wch,
-                                                         const gsl::span<const size_t> parameters,
+                                                         const til::clump_view<size_t> parameters,
                                                          DWORD& buttonState,
                                                          DWORD& eventFlags) noexcept
 {
@@ -941,7 +941,7 @@ bool InputStateMachineEngine::_UpdateSGRMouseButtonState(const wchar_t wch,
     //   BB__'__BB - which button was pressed/released
     //   MMM - Control, Alt, Shift state (respectively)
     //   D - flag signifying a drag event
-    const auto sgrEncoding = til::at(parameters, 0);
+    const auto sgrEncoding = til::at(*(parameters.begin()), 0);
 
     // This retrieves the 2 MSBs and concatenates them to the 2 LSBs to create BBBB in binary
     // This represents which button had a change in state
@@ -1024,7 +1024,7 @@ bool InputStateMachineEngine::_UpdateSGRMouseButtonState(const wchar_t wch,
 // - vkey: Receives the vkey
 // Return Value:
 // true iff we found the key
-bool InputStateMachineEngine::_GetGenericVkey(const gsl::span<const size_t> parameters, short& vkey) const
+bool InputStateMachineEngine::_GetGenericVkey(const til::clump_view<size_t> parameters, short& vkey) const
 {
     vkey = 0;
     if (parameters.empty())
@@ -1032,7 +1032,7 @@ bool InputStateMachineEngine::_GetGenericVkey(const gsl::span<const size_t> para
         return false;
     }
 
-    const auto identifier = (GenericKeyIdentifiers)til::at(parameters, 0);
+    const auto identifier = (GenericKeyIdentifiers)til::at(*(parameters.begin()), 0);
 
     const auto mapping = std::find(s_genericMap.cbegin(), s_genericMap.cend(), identifier);
     if (mapping != s_genericMap.end())
@@ -1200,7 +1200,7 @@ void InputStateMachineEngine::SetFlushToInputQueueCallback(std::function<bool()>
 // - function - Receives the function type
 // Return Value:
 // - True iff we successfully pulled the function type from the parameters
-bool InputStateMachineEngine::_GetWindowManipulationType(const gsl::span<const size_t> parameters,
+bool InputStateMachineEngine::_GetWindowManipulationType(const til::clump_view<size_t> parameters,
                                                          unsigned int& function) const noexcept
 {
     bool success = false;
@@ -1208,7 +1208,7 @@ bool InputStateMachineEngine::_GetWindowManipulationType(const gsl::span<const s
 
     if (!parameters.empty())
     {
-        switch (til::at(parameters, 0))
+        switch (til::at(*(parameters.begin()), 0))
         {
         case DispatchTypes::WindowManipulationType::RefreshWindow:
             function = DispatchTypes::WindowManipulationType::RefreshWindow;
@@ -1234,7 +1234,7 @@ bool InputStateMachineEngine::_GetWindowManipulationType(const gsl::span<const s
 // - column - Receives the X/Column position
 // Return Value:
 // - True if we successfully pulled the cursor coordinates from the parameters we've stored. False otherwise.
-bool InputStateMachineEngine::_GetXYPosition(const gsl::span<const size_t> parameters,
+bool InputStateMachineEngine::_GetXYPosition(const til::clump_view<size_t> parameters,
                                              size_t& line,
                                              size_t& column) const noexcept
 {
@@ -1248,13 +1248,13 @@ bool InputStateMachineEngine::_GetXYPosition(const gsl::span<const size_t> param
     else if (parameters.size() == 1)
     {
         // If there's only one param, leave the default for the column, and retrieve the specified row.
-        line = til::at(parameters, 0);
+        line = til::at(*(parameters.begin()), 0);
     }
     else if (parameters.size() == 2)
     {
         // If there are exactly two parameters, use them.
-        line = til::at(parameters, 0);
-        column = til::at(parameters, 1);
+        line = til::at(*(parameters.begin()), 0);
+        column = til::at(*(parameters.begin()++), 0);
     }
     else
     {
@@ -1283,7 +1283,7 @@ bool InputStateMachineEngine::_GetXYPosition(const gsl::span<const size_t> param
 // - column - Receives the X/Column position
 // Return Value:
 // - True if we successfully pulled the cursor coordinates from the parameters we've stored. False otherwise.
-bool InputStateMachineEngine::_GetSGRXYPosition(const gsl::span<const size_t> parameters,
+bool InputStateMachineEngine::_GetSGRXYPosition(const til::clump_view<size_t> parameters,
                                                 size_t& line,
                                                 size_t& column) const noexcept
 {
@@ -1293,8 +1293,9 @@ bool InputStateMachineEngine::_GetSGRXYPosition(const gsl::span<const size_t> pa
     // SGR Mouse sequences have exactly 3 parameters
     if (parameters.size() == 3)
     {
-        column = til::at(parameters, 1);
-        line = til::at(parameters, 2);
+        auto it{ parameters.begin()++ };
+        column = til::at(*it++, 0);
+        line = til::at(*it++, 0);
     }
     else
     {
@@ -1315,6 +1316,15 @@ bool InputStateMachineEngine::_GetSGRXYPosition(const gsl::span<const size_t> pa
     return true;
 }
 
+template <typename T>
+T fakeat(const til::clump_view<T> p, ptrdiff_t o)
+{
+    auto it{ p.begin() };
+    while (o > 0)
+        it++;
+    return til::at(*it, 0);
+}
+
 // Method Description:
 // - Attempt to parse our parameters into a win32-input-mode serialized KeyEvent.
 // Arguments:
@@ -1322,7 +1332,7 @@ bool InputStateMachineEngine::_GetSGRXYPosition(const gsl::span<const size_t> pa
 // - key: receives the values of the deserialized KeyEvent.
 // Return Value:
 // - true if we successfully parsed the key event.
-bool InputStateMachineEngine::_GenerateWin32Key(const gsl::span<const size_t> parameters,
+bool InputStateMachineEngine::_GenerateWin32Key(const til::clump_view<size_t> parameters,
                                                 KeyEvent& key)
 {
     // Sequences are formatted as follows:
@@ -1347,22 +1357,22 @@ bool InputStateMachineEngine::_GenerateWin32Key(const gsl::span<const size_t> pa
     switch (parameters.size())
     {
     case 6:
-        key.SetRepeatCount(::base::saturated_cast<WORD>(til::at(parameters, 5)));
+        key.SetRepeatCount(::base::saturated_cast<WORD>(fakeat(parameters, 5)));
         [[fallthrough]];
     case 5:
-        key.SetActiveModifierKeys(::base::saturated_cast<DWORD>(til::at(parameters, 4)));
+        key.SetActiveModifierKeys(::base::saturated_cast<DWORD>(fakeat(parameters, 4)));
         [[fallthrough]];
     case 4:
-        key.SetKeyDown(static_cast<bool>(til::at(parameters, 3)));
+        key.SetKeyDown(static_cast<bool>(fakeat(parameters, 3)));
         [[fallthrough]];
     case 3:
-        key.SetCharData(static_cast<wchar_t>(til::at(parameters, 2)));
+        key.SetCharData(static_cast<wchar_t>(fakeat(parameters, 2)));
         [[fallthrough]];
     case 2:
-        key.SetVirtualScanCode(::base::saturated_cast<WORD>(til::at(parameters, 1)));
+        key.SetVirtualScanCode(::base::saturated_cast<WORD>(fakeat(parameters, 1)));
         [[fallthrough]];
     case 1:
-        key.SetVirtualKeyCode(::base::saturated_cast<WORD>(til::at(parameters, 0)));
+        key.SetVirtualKeyCode(::base::saturated_cast<WORD>(fakeat(parameters, 0)));
         break;
     }
 

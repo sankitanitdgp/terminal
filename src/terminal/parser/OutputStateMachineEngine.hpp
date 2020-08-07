@@ -38,11 +38,11 @@ namespace Microsoft::Console::VirtualTerminal
 
         bool ActionVt52EscDispatch(const wchar_t wch,
                                    const gsl::span<const wchar_t> intermediates,
-                                   const gsl::span<const size_t> parameters) override;
+                                   const til::clump_view<size_t> parameters) override;
 
         bool ActionCsiDispatch(const wchar_t wch,
                                const gsl::span<const wchar_t> intermediates,
-                               const gsl::span<const size_t> parameters) override;
+                               const til::clump_view<size_t> parameters) override;
 
         bool ActionClear() noexcept override;
 
@@ -53,7 +53,7 @@ namespace Microsoft::Console::VirtualTerminal
                                const std::wstring_view string) override;
 
         bool ActionSs3Dispatch(const wchar_t wch,
-                               const gsl::span<const size_t> parameters) noexcept override;
+                               const til::clump_view<size_t> parameters) noexcept override;
 
         bool ParseControlSequenceAfterSs3() const noexcept override;
         bool FlushAtEndOfString() const noexcept override;
@@ -71,18 +71,18 @@ namespace Microsoft::Console::VirtualTerminal
         Microsoft::Console::ITerminalOutputConnection* _pTtyConnection;
         std::function<bool()> _pfnFlushToTerminal;
         wchar_t _lastPrintedChar;
-        std::vector<DispatchTypes::GraphicsOptions> _graphicsOptions;
+        til::clump<DispatchTypes::GraphicsOptions> _graphicsOptions;
 
         bool _IntermediateScsDispatch(const wchar_t wch,
                                       const gsl::span<const wchar_t> intermediates);
         bool _IntermediateQuestionMarkDispatch(const wchar_t wchAction,
-                                               const gsl::span<const size_t> parameters);
+                                               const til::clump_view<size_t> parameters);
         bool _IntermediateGreaterThanOrEqualDispatch(const wchar_t wch,
                                                      const wchar_t intermediate,
-                                                     const gsl::span<const size_t> parameters);
+                                                     const til::clump_view<size_t> parameters);
         bool _IntermediateExclamationDispatch(const wchar_t wch);
         bool _IntermediateSpaceDispatch(const wchar_t wchAction,
-                                        const gsl::span<const size_t> parameters);
+                                        const til::clump_view<size_t> parameters);
 
         enum VTActionCodes : wchar_t
         {
@@ -180,44 +180,44 @@ namespace Microsoft::Console::VirtualTerminal
         };
 
         static constexpr DispatchTypes::GraphicsOptions DefaultGraphicsOption = DispatchTypes::GraphicsOptions::Off;
-        bool _GetGraphicsOptions(const gsl::span<const size_t> parameters,
-                                 std::vector<DispatchTypes::GraphicsOptions>& options) const;
+        bool _GetGraphicsOptions(const til::clump_view<size_t> parameters,
+                                 til::clump<DispatchTypes::GraphicsOptions>& options) const;
 
         static constexpr DispatchTypes::EraseType DefaultEraseType = DispatchTypes::EraseType::ToEnd;
-        bool _GetEraseOperation(const gsl::span<const size_t> parameters,
+        bool _GetEraseOperation(const til::clump_view<size_t> parameters,
                                 DispatchTypes::EraseType& eraseType) const noexcept;
 
         static constexpr size_t DefaultCursorDistance = 1;
-        bool _GetCursorDistance(const gsl::span<const size_t> parameters,
+        bool _GetCursorDistance(const til::clump_view<size_t> parameters,
                                 size_t& distance) const noexcept;
 
         static constexpr size_t DefaultScrollDistance = 1;
-        bool _GetScrollDistance(const gsl::span<const size_t> parameters,
+        bool _GetScrollDistance(const til::clump_view<size_t> parameters,
                                 size_t& distance) const noexcept;
 
         static constexpr size_t DefaultConsoleWidth = 80;
-        bool _GetConsoleWidth(const gsl::span<const size_t> parameters,
+        bool _GetConsoleWidth(const til::clump_view<size_t> parameters,
                               size_t& consoleWidth) const noexcept;
 
         static constexpr size_t DefaultLine = 1;
         static constexpr size_t DefaultColumn = 1;
-        bool _GetXYPosition(const gsl::span<const size_t> parameters,
+        bool _GetXYPosition(const til::clump_view<size_t> parameters,
                             size_t& line,
                             size_t& column) const noexcept;
 
-        bool _GetDeviceStatusOperation(const gsl::span<const size_t> parameters,
+        bool _GetDeviceStatusOperation(const til::clump_view<size_t> parameters,
                                        DispatchTypes::AnsiStatusType& statusType) const noexcept;
 
-        bool _VerifyHasNoParameters(const gsl::span<const size_t> parameters) const noexcept;
+        bool _VerifyHasNoParameters(const til::clump_view<size_t> parameters) const noexcept;
 
-        bool _VerifyDeviceAttributesParams(const gsl::span<const size_t> parameters) const noexcept;
+        bool _VerifyDeviceAttributesParams(const til::clump_view<size_t> parameters) const noexcept;
 
-        bool _GetPrivateModeParams(const gsl::span<const size_t> parameters,
+        bool _GetPrivateModeParams(const til::clump_view<size_t> parameters,
                                    std::vector<DispatchTypes::PrivateModeParams>& privateModes) const;
 
         static constexpr size_t DefaultTopMargin = 0;
         static constexpr size_t DefaultBottomMargin = 0;
-        bool _GetTopBottomMargins(const gsl::span<const size_t> parameters,
+        bool _GetTopBottomMargins(const til::clump_view<size_t> parameters,
                                   size_t& topMargin,
                                   size_t& bottomMargin) const noexcept;
 
@@ -225,15 +225,15 @@ namespace Microsoft::Console::VirtualTerminal
                           std::wstring& title) const;
 
         static constexpr size_t DefaultTabDistance = 1;
-        bool _GetTabDistance(const gsl::span<const size_t> parameters,
+        bool _GetTabDistance(const til::clump_view<size_t> parameters,
                              size_t& distance) const noexcept;
 
         static constexpr size_t DefaultTabClearType = 0;
-        bool _GetTabClearType(const gsl::span<const size_t> parameters,
+        bool _GetTabClearType(const til::clump_view<size_t> parameters,
                               size_t& clearType) const noexcept;
 
         static constexpr DispatchTypes::WindowManipulationType DefaultWindowManipulationType = DispatchTypes::WindowManipulationType::Invalid;
-        bool _GetWindowManipulationType(const gsl::span<const size_t> parameters,
+        bool _GetWindowManipulationType(const til::clump_view<size_t> parameters,
                                         unsigned int& function) const noexcept;
 
         static bool s_HexToUint(const wchar_t wch,
@@ -249,11 +249,11 @@ namespace Microsoft::Console::VirtualTerminal
                              DWORD& rgb) const noexcept;
 
         static constexpr DispatchTypes::CursorStyle DefaultCursorStyle = DispatchTypes::CursorStyle::BlinkingBlockDefault;
-        bool _GetCursorStyle(const gsl::span<const size_t> parameters,
+        bool _GetCursorStyle(const til::clump_view<size_t> parameters,
                              DispatchTypes::CursorStyle& cursorStyle) const noexcept;
 
         static constexpr size_t DefaultRepeatCount = 1;
-        bool _GetRepeatCount(const gsl::span<const size_t> parameters,
+        bool _GetRepeatCount(const til::clump_view<size_t> parameters,
                              size_t& repeatCount) const noexcept;
 
         bool _GetOscSetClipboard(const std::wstring_view string,

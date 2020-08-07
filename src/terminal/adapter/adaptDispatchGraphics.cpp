@@ -56,12 +56,12 @@ size_t AdaptDispatch::_SetRgbColorsHelper(const gsl::span<const DispatchTypes::G
     {
         optionsConsumed = 1;
         const auto typeOpt = til::at(options, 0);
-        if (typeOpt == DispatchTypes::GraphicsOptions::RGBColorOrFaint && options.size() >= 4)
+        if (typeOpt == DispatchTypes::GraphicsOptions::RGBColorOrFaint && options.size() >= 5)
         {
-            optionsConsumed = 4;
-            const size_t red = til::at(options, 1);
-            const size_t green = til::at(options, 2);
-            const size_t blue = til::at(options, 3);
+            optionsConsumed = 5;
+            const size_t red = til::at(options, 2);
+            const size_t green = til::at(options, 3);
+            const size_t blue = til::at(options, 4);
             // ensure that each value fits in a byte
             if (red <= 255 && green <= 255 && blue <= 255)
             {

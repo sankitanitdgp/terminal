@@ -378,7 +378,7 @@ void StateMachine::_ActionVt52EscDispatch(const wchar_t wch)
 
     const bool success = _engine->ActionVt52EscDispatch(wch,
                                                         { _intermediates.data(), _intermediates.size() },
-                                                        { _parameters.data(), _parameters.size() });
+                                                        til::clump_view{ _parameters });
 
     // Trace the result.
     _trace.DispatchSequenceTrace(success);
@@ -403,7 +403,7 @@ void StateMachine::_ActionCsiDispatch(const wchar_t wch)
 
     const bool success = _engine->ActionCsiDispatch(wch,
                                                     { _intermediates.data(), _intermediates.size() },
-                                                    { _parameters.data(), _parameters.size() });
+                                                    til::clump_view{ _parameters});
 
     // Trace the result.
     _trace.DispatchSequenceTrace(success);
@@ -554,7 +554,7 @@ void StateMachine::_ActionSs3Dispatch(const wchar_t wch)
 {
     _trace.TraceOnAction(L"Ss3Dispatch");
 
-    const bool success = _engine->ActionSs3Dispatch(wch, { _parameters.data(), _parameters.size() });
+    const bool success = _engine->ActionSs3Dispatch(wch, til::clump_view{ _parameters });
 
     // Trace the result.
     _trace.DispatchSequenceTrace(success);
