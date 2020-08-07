@@ -45,14 +45,11 @@ size_t TerminalDispatch::_SetRgbColorsHelper(const gsl::span<const DispatchTypes
                                              TextAttribute& attr,
                                              const bool isForeground) noexcept
 {
-    size_t optionsConsumed = 0;
     if (options.size() >= 1)
     {
-        optionsConsumed = 1;
         const auto typeOpt = til::at(options, 0);
         if (typeOpt == DispatchTypes::GraphicsOptions::RGBColorOrFaint && options.size() >= 5)
         {
-            optionsConsumed = 5;
             const size_t red = til::at(options, 2);
             const size_t green = til::at(options, 3);
             const size_t blue = til::at(options, 4);
@@ -65,7 +62,6 @@ size_t TerminalDispatch::_SetRgbColorsHelper(const gsl::span<const DispatchTypes
         }
         else if (typeOpt == DispatchTypes::GraphicsOptions::BlinkOrXterm256Index && options.size() >= 2)
         {
-            optionsConsumed = 2;
             const size_t tableIndex = til::at(options, 1);
             if (tableIndex <= 255)
             {
@@ -81,7 +77,7 @@ size_t TerminalDispatch::_SetRgbColorsHelper(const gsl::span<const DispatchTypes
             }
         }
     }
-    return optionsConsumed;
+    return 1;
 }
 
 // Routine Description:
@@ -99,9 +95,9 @@ bool TerminalDispatch::SetGraphicsRendition(const gsl::span<const DispatchTypes:
     TextAttribute attr = _terminalApi.GetTextAttributes();
 
     // Run through the graphics options and apply them
-    for (size_t i = 0; i < options.size(); i++)
+    if (options.size() > 0)
     {
-        const auto opt = til::at(options, i);
+        const auto opt = til::at(options, 0);
         switch (opt)
         {
         case Off:
@@ -264,10 +260,10 @@ bool TerminalDispatch::SetGraphicsRendition(const gsl::span<const DispatchTypes:
             attr.SetIndexedBackground(BRIGHT_WHITE);
             break;
         case ForegroundExtended:
-            i += _SetRgbColorsHelper(options.subspan(i + 1), attr, true);
+            _SetRgbColorsHelper(options.subspan(1), attr, true);
             break;
         case BackgroundExtended:
-            i += _SetRgbColorsHelper(options.subspan(i + 1), attr, false);
+            _SetRgbColorsHelper(options.subspan(1), attr, false);
             break;
         }
     }

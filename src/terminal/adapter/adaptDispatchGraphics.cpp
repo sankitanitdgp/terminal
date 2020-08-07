@@ -39,7 +39,7 @@ const BYTE BRIGHT_WHITE   = BRIGHT_ATTR | RED_ATTR | GREEN_ATTR | BLUE_ATTR;
 // Routine Description:
 // - Helper to parse extended graphics options, which start with 38 (FG) or 48 (BG)
 //     These options are followed by either a 2 (RGB) or 5 (xterm index)
-//      RGB sequences then take 3 MORE params to designate the R, G, B parts of the color
+//      RGB sequences then take 4 MORE params to designate a colorspace and the R, G, B parts of the color
 //      Xterm index will use the param that follows to use a color from the preset 256 color xterm color table.
 // Arguments:
 // - options - An array of options that will be used to generate the RGB color
@@ -51,14 +51,11 @@ size_t AdaptDispatch::_SetRgbColorsHelper(const gsl::span<const DispatchTypes::G
                                           TextAttribute& attr,
                                           const bool isForeground) noexcept
 {
-    size_t optionsConsumed = 0;
     if (options.size() >= 1)
     {
-        optionsConsumed = 1;
         const auto typeOpt = til::at(options, 0);
         if (typeOpt == DispatchTypes::GraphicsOptions::RGBColorOrFaint && options.size() >= 5)
         {
-            optionsConsumed = 5;
             const size_t red = til::at(options, 2);
             const size_t green = til::at(options, 3);
             const size_t blue = til::at(options, 4);
@@ -71,7 +68,6 @@ size_t AdaptDispatch::_SetRgbColorsHelper(const gsl::span<const DispatchTypes::G
         }
         else if (typeOpt == DispatchTypes::GraphicsOptions::BlinkOrXterm256Index && options.size() >= 2)
         {
-            optionsConsumed = 2;
             const size_t tableIndex = til::at(options, 1);
             if (tableIndex <= 255)
             {
@@ -87,7 +83,7 @@ size_t AdaptDispatch::_SetRgbColorsHelper(const gsl::span<const DispatchTypes::G
             }
         }
     }
-    return optionsConsumed;
+    return 1;
 }
 
 // Routine Description:
@@ -105,180 +101,176 @@ bool AdaptDispatch::SetGraphicsRendition(const gsl::span<const DispatchTypes::Gr
     TextAttribute attr;
     bool success = _pConApi->PrivateGetTextAttributes(attr);
 
-    if (success)
+    if (success && options.size() > 0)
     {
-        // Run through the graphics options and apply them
-        for (size_t i = 0; i < options.size(); i++)
+        const auto opt = til::at(options, 0);
+        switch (opt)
         {
-            const auto opt = til::at(options, i);
-            switch (opt)
-            {
-            case Off:
-                attr.SetDefaultForeground();
-                attr.SetDefaultBackground();
-                attr.SetStandardErase();
-                break;
-            case ForegroundDefault:
-                attr.SetDefaultForeground();
-                break;
-            case BackgroundDefault:
-                attr.SetDefaultBackground();
-                break;
-            case BoldBright:
-                attr.SetBold(true);
-                break;
-            case RGBColorOrFaint:
-                attr.SetFaint(true);
-                break;
-            case NotBoldOrFaint:
-                attr.SetBold(false);
-                attr.SetFaint(false);
-                break;
-            case Italics:
-                attr.SetItalic(true);
-                break;
-            case NotItalics:
-                attr.SetItalic(false);
-                break;
-            case BlinkOrXterm256Index:
-                attr.SetBlinking(true);
-                break;
-            case Steady:
-                attr.SetBlinking(false);
-                break;
-            case Invisible:
-                attr.SetInvisible(true);
-                break;
-            case Visible:
-                attr.SetInvisible(false);
-                break;
-            case CrossedOut:
-                attr.SetCrossedOut(true);
-                break;
-            case NotCrossedOut:
-                attr.SetCrossedOut(false);
-                break;
-            case Negative:
-                attr.SetReverseVideo(true);
-                break;
-            case Positive:
-                attr.SetReverseVideo(false);
-                break;
-            case Underline:
-                attr.SetUnderlined(true);
-                break;
-            case NoUnderline:
-                attr.SetUnderlined(false);
-                break;
-            case Overline:
-                attr.SetOverlined(true);
-                break;
-            case NoOverline:
-                attr.SetOverlined(false);
-                break;
-            case ForegroundBlack:
-                attr.SetIndexedForeground(DARK_BLACK);
-                break;
-            case ForegroundBlue:
-                attr.SetIndexedForeground(DARK_BLUE);
-                break;
-            case ForegroundGreen:
-                attr.SetIndexedForeground(DARK_GREEN);
-                break;
-            case ForegroundCyan:
-                attr.SetIndexedForeground(DARK_CYAN);
-                break;
-            case ForegroundRed:
-                attr.SetIndexedForeground(DARK_RED);
-                break;
-            case ForegroundMagenta:
-                attr.SetIndexedForeground(DARK_MAGENTA);
-                break;
-            case ForegroundYellow:
-                attr.SetIndexedForeground(DARK_YELLOW);
-                break;
-            case ForegroundWhite:
-                attr.SetIndexedForeground(DARK_WHITE);
-                break;
-            case BackgroundBlack:
-                attr.SetIndexedBackground(DARK_BLACK);
-                break;
-            case BackgroundBlue:
-                attr.SetIndexedBackground(DARK_BLUE);
-                break;
-            case BackgroundGreen:
-                attr.SetIndexedBackground(DARK_GREEN);
-                break;
-            case BackgroundCyan:
-                attr.SetIndexedBackground(DARK_CYAN);
-                break;
-            case BackgroundRed:
-                attr.SetIndexedBackground(DARK_RED);
-                break;
-            case BackgroundMagenta:
-                attr.SetIndexedBackground(DARK_MAGENTA);
-                break;
-            case BackgroundYellow:
-                attr.SetIndexedBackground(DARK_YELLOW);
-                break;
-            case BackgroundWhite:
-                attr.SetIndexedBackground(DARK_WHITE);
-                break;
-            case BrightForegroundBlack:
-                attr.SetIndexedForeground(BRIGHT_BLACK);
-                break;
-            case BrightForegroundBlue:
-                attr.SetIndexedForeground(BRIGHT_BLUE);
-                break;
-            case BrightForegroundGreen:
-                attr.SetIndexedForeground(BRIGHT_GREEN);
-                break;
-            case BrightForegroundCyan:
-                attr.SetIndexedForeground(BRIGHT_CYAN);
-                break;
-            case BrightForegroundRed:
-                attr.SetIndexedForeground(BRIGHT_RED);
-                break;
-            case BrightForegroundMagenta:
-                attr.SetIndexedForeground(BRIGHT_MAGENTA);
-                break;
-            case BrightForegroundYellow:
-                attr.SetIndexedForeground(BRIGHT_YELLOW);
-                break;
-            case BrightForegroundWhite:
-                attr.SetIndexedForeground(BRIGHT_WHITE);
-                break;
-            case BrightBackgroundBlack:
-                attr.SetIndexedBackground(BRIGHT_BLACK);
-                break;
-            case BrightBackgroundBlue:
-                attr.SetIndexedBackground(BRIGHT_BLUE);
-                break;
-            case BrightBackgroundGreen:
-                attr.SetIndexedBackground(BRIGHT_GREEN);
-                break;
-            case BrightBackgroundCyan:
-                attr.SetIndexedBackground(BRIGHT_CYAN);
-                break;
-            case BrightBackgroundRed:
-                attr.SetIndexedBackground(BRIGHT_RED);
-                break;
-            case BrightBackgroundMagenta:
-                attr.SetIndexedBackground(BRIGHT_MAGENTA);
-                break;
-            case BrightBackgroundYellow:
-                attr.SetIndexedBackground(BRIGHT_YELLOW);
-                break;
-            case BrightBackgroundWhite:
-                attr.SetIndexedBackground(BRIGHT_WHITE);
-                break;
-            case ForegroundExtended:
-                i += _SetRgbColorsHelper(options.subspan(i + 1), attr, true);
-                break;
-            case BackgroundExtended:
-                i += _SetRgbColorsHelper(options.subspan(i + 1), attr, false);
-                break;
-            }
+        case Off:
+            attr.SetDefaultForeground();
+            attr.SetDefaultBackground();
+            attr.SetStandardErase();
+            break;
+        case ForegroundDefault:
+            attr.SetDefaultForeground();
+            break;
+        case BackgroundDefault:
+            attr.SetDefaultBackground();
+            break;
+        case BoldBright:
+            attr.SetBold(true);
+            break;
+        case RGBColorOrFaint:
+            attr.SetFaint(true);
+            break;
+        case NotBoldOrFaint:
+            attr.SetBold(false);
+            attr.SetFaint(false);
+            break;
+        case Italics:
+            attr.SetItalic(true);
+            break;
+        case NotItalics:
+            attr.SetItalic(false);
+            break;
+        case BlinkOrXterm256Index:
+            attr.SetBlinking(true);
+            break;
+        case Steady:
+            attr.SetBlinking(false);
+            break;
+        case Invisible:
+            attr.SetInvisible(true);
+            break;
+        case Visible:
+            attr.SetInvisible(false);
+            break;
+        case CrossedOut:
+            attr.SetCrossedOut(true);
+            break;
+        case NotCrossedOut:
+            attr.SetCrossedOut(false);
+            break;
+        case Negative:
+            attr.SetReverseVideo(true);
+            break;
+        case Positive:
+            attr.SetReverseVideo(false);
+            break;
+        case Underline:
+            attr.SetUnderlined(true);
+            break;
+        case NoUnderline:
+            attr.SetUnderlined(false);
+            break;
+        case Overline:
+            attr.SetOverlined(true);
+            break;
+        case NoOverline:
+            attr.SetOverlined(false);
+            break;
+        case ForegroundBlack:
+            attr.SetIndexedForeground(DARK_BLACK);
+            break;
+        case ForegroundBlue:
+            attr.SetIndexedForeground(DARK_BLUE);
+            break;
+        case ForegroundGreen:
+            attr.SetIndexedForeground(DARK_GREEN);
+            break;
+        case ForegroundCyan:
+            attr.SetIndexedForeground(DARK_CYAN);
+            break;
+        case ForegroundRed:
+            attr.SetIndexedForeground(DARK_RED);
+            break;
+        case ForegroundMagenta:
+            attr.SetIndexedForeground(DARK_MAGENTA);
+            break;
+        case ForegroundYellow:
+            attr.SetIndexedForeground(DARK_YELLOW);
+            break;
+        case ForegroundWhite:
+            attr.SetIndexedForeground(DARK_WHITE);
+            break;
+        case BackgroundBlack:
+            attr.SetIndexedBackground(DARK_BLACK);
+            break;
+        case BackgroundBlue:
+            attr.SetIndexedBackground(DARK_BLUE);
+            break;
+        case BackgroundGreen:
+            attr.SetIndexedBackground(DARK_GREEN);
+            break;
+        case BackgroundCyan:
+            attr.SetIndexedBackground(DARK_CYAN);
+            break;
+        case BackgroundRed:
+            attr.SetIndexedBackground(DARK_RED);
+            break;
+        case BackgroundMagenta:
+            attr.SetIndexedBackground(DARK_MAGENTA);
+            break;
+        case BackgroundYellow:
+            attr.SetIndexedBackground(DARK_YELLOW);
+            break;
+        case BackgroundWhite:
+            attr.SetIndexedBackground(DARK_WHITE);
+            break;
+        case BrightForegroundBlack:
+            attr.SetIndexedForeground(BRIGHT_BLACK);
+            break;
+        case BrightForegroundBlue:
+            attr.SetIndexedForeground(BRIGHT_BLUE);
+            break;
+        case BrightForegroundGreen:
+            attr.SetIndexedForeground(BRIGHT_GREEN);
+            break;
+        case BrightForegroundCyan:
+            attr.SetIndexedForeground(BRIGHT_CYAN);
+            break;
+        case BrightForegroundRed:
+            attr.SetIndexedForeground(BRIGHT_RED);
+            break;
+        case BrightForegroundMagenta:
+            attr.SetIndexedForeground(BRIGHT_MAGENTA);
+            break;
+        case BrightForegroundYellow:
+            attr.SetIndexedForeground(BRIGHT_YELLOW);
+            break;
+        case BrightForegroundWhite:
+            attr.SetIndexedForeground(BRIGHT_WHITE);
+            break;
+        case BrightBackgroundBlack:
+            attr.SetIndexedBackground(BRIGHT_BLACK);
+            break;
+        case BrightBackgroundBlue:
+            attr.SetIndexedBackground(BRIGHT_BLUE);
+            break;
+        case BrightBackgroundGreen:
+            attr.SetIndexedBackground(BRIGHT_GREEN);
+            break;
+        case BrightBackgroundCyan:
+            attr.SetIndexedBackground(BRIGHT_CYAN);
+            break;
+        case BrightBackgroundRed:
+            attr.SetIndexedBackground(BRIGHT_RED);
+            break;
+        case BrightBackgroundMagenta:
+            attr.SetIndexedBackground(BRIGHT_MAGENTA);
+            break;
+        case BrightBackgroundYellow:
+            attr.SetIndexedBackground(BRIGHT_YELLOW);
+            break;
+        case BrightBackgroundWhite:
+            attr.SetIndexedBackground(BRIGHT_WHITE);
+            break;
+        case ForegroundExtended:
+            _SetRgbColorsHelper(options.subspan(1), attr, true);
+            break;
+        case BackgroundExtended:
+            _SetRgbColorsHelper(options.subspan(1), attr, false);
+            break;
         }
         success = _pConApi->PrivateSetTextAttributes(attr);
     }

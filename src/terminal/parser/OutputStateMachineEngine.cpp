@@ -1053,7 +1053,7 @@ bool OutputStateMachineEngine::_GetGraphicsOptions(const til::clump_view<size_t>
     }
     else
     {
-        for (auto pi{ parameters.begin() }; pi != parameters.end(); )
+        for (auto pi{ parameters.begin() }; pi != parameters.end();)
         {
             const auto fval{ (DispatchTypes::GraphicsOptions)til::at(*pi, 0) };
             options.push_back(fval);
@@ -1069,7 +1069,7 @@ bool OutputStateMachineEngine::_GetGraphicsOptions(const til::clump_view<size_t>
                 }
                 else if (nval == DispatchTypes::GraphicsOptions::RGBColorOrFaint)
                 {
-                    options.push_glom(DispatchTypes::GraphicsOptions::Off); // COLOR SPACE ARGUMENT
+                    options.push_glom((DispatchTypes::GraphicsOptions)0); // COLOR SPACE ARGUMENT
                     count = 3;
                 }
                 while (count-- > 0 && pi != parameters.end())
