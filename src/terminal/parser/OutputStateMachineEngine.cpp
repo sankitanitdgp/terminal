@@ -1057,6 +1057,27 @@ bool OutputStateMachineEngine::_GetGraphicsOptions(const til::clump_view<size_t>
         {
             const auto fval{ (DispatchTypes::GraphicsOptions)til::at(*pi, 0) };
             options.push_back(fval);
+            if (pi->size() == 1 && (fval == 38 || fval == 48) && (parameters.end() - pi) > 1) // we only got one AND there's more than one left... glom it
+            {
+                ++pi;
+                size_t count{ 0 };
+                const auto nval{ (DispatchTypes::GraphicsOptions)til::at(*pi++, 0) };
+                options.push_glom(nval);
+                if (nval == DispatchTypes::GraphicsOptions::BlinkOrXterm256Index)
+                {
+                    count = 1;
+                }
+                else if (nval == DispatchTypes::GraphicsOptions::RGBColorOrFaint)
+                {
+                    options.push_glom(DispatchTypes::GraphicsOptions::Off); // COLOR SPACE ARGUMENT
+                    count = 3;
+                }
+                while (count-- > 0 && pi != parameters.end())
+                {
+                    options.push_glom((DispatchTypes::GraphicsOptions)til::at(*pi++, 0));
+                }
+                continue;
+            }
             for (auto v : pi->subspan(1))
             {
                 options.push_glom((DispatchTypes::GraphicsOptions)v);

@@ -151,7 +151,7 @@ static constexpr bool _isCsiIndicator(const wchar_t wch) noexcept
 // - True if it is. False if it isn't.
 static constexpr bool _isCsiDelimiter(const wchar_t wch) noexcept
 {
-    return wch == L';'; // 0x3B
+    return wch == L';' || wch == L':'; // 0x3B
 }
 
 // Routine Description:
@@ -453,6 +453,10 @@ void StateMachine::_ActionParam(const wchar_t wch)
     {
         // Move to next param.
         _parameters.push_back(0);
+    }
+    else if (wch == L':')
+    {
+        _parameters.push_glom(0);
     }
     else
     {
