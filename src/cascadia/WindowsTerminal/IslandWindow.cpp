@@ -5,6 +5,7 @@
 #include "IslandWindow.h"
 #include "../types/inc/Viewport.hpp"
 #include "resource.h"
+#include "winrt/Windows.ApplicationModel.h"
 
 extern "C" IMAGE_DOS_HEADER __ImageBase;
 
@@ -114,6 +115,57 @@ void IslandWindow::SetSnapDimensionCallback(std::function<float(bool, float)> pf
     _pfnSnapDimensionCallback = pfn;
 }
 
+static void _UpdateIcon(HWND wnd)
+{
+    bool dev{ false };
+    bool preview{ false };
+    try
+    {
+        const auto package{ winrt::Windows::ApplicationModel::Package::Current() };
+        const auto id = package.Id();
+        const std::wstring name{ id.FullName() };
+        preview = name.find(L"Preview") != std::wstring_view::npos;
+        dev = name.find(L"Dev") != std::wstring_view::npos;
+    }
+    catch (...)
+    {
+    }
+
+    auto base{ IDI_APPICON };
+    if (preview)
+    {
+        base = IDI_APPICON_PRE;
+    }
+    else if (dev)
+    {
+        base = IDI_APPICON_DEV;
+    }
+
+    HIGHCONTRASTW hcw{};
+    hcw.cbSize = sizeof(hcw);
+
+    if (SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(hcw), &hcw, 0))
+    {
+        if (WI_IsFlagSet(hcw.dwFlags, HCF_HIGHCONTRASTON))
+        {
+            const auto white = wcsstr(hcw.lpszDefaultScheme, L"White") != nullptr;
+            if (white)
+            {
+                base += 2;
+            }
+            else
+            {
+                base += 1;
+            }
+        }
+    }
+
+    HANDLE smIcon{ LoadImageW(wil::GetModuleInstanceHandle(), MAKEINTRESOURCEW(base), IMAGE_ICON, GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON), LR_DEFAULTCOLOR) };
+    HANDLE lgIcon{ LoadImageW(wil::GetModuleInstanceHandle(), MAKEINTRESOURCEW(base), IMAGE_ICON, GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON), LR_DEFAULTCOLOR) };
+    SendMessageW(wnd, WM_SETICON, ICON_SMALL, (LPARAM)smIcon);
+    SendMessageW(wnd, WM_SETICON, ICON_BIG, (LPARAM)lgIcon);
+}
+
 // Method Description:
 // - Handles a WM_CREATE message. Calls our create callback, if one's been set.
 // Arguments:
@@ -146,6 +198,8 @@ void IslandWindow::_HandleCreateWindow(const WPARAM, const LPARAM lParam) noexce
     ShowWindow(_window.get(), nCmdShow);
 
     UpdateWindow(_window.get());
+
+    _UpdateIcon(_window.get());
 }
 
 // Method Description:
@@ -276,13 +330,11 @@ void IslandWindow::OnSize(const UINT width, const UINT height)
 {
     switch (message)
     {
-    case WM_CREATE:
-    {
+    case WM_CREATE: {
         _HandleCreateWindow(wparam, lparam);
         return 0;
     }
-    case WM_SETFOCUS:
-    {
+    case WM_SETFOCUS: {
         if (_interopWindowHandle != nullptr)
         {
             // send focus to the child window
@@ -298,26 +350,22 @@ void IslandWindow::OnSize(const UINT width, const UINT height)
     case WM_NCRBUTTONDOWN:
     case WM_NCRBUTTONUP:
     case WM_NCXBUTTONDOWN:
-    case WM_NCXBUTTONUP:
-    {
+    case WM_NCXBUTTONUP: {
         // If we clicked in the titlebar, raise an event so the app host can
         // dispatch an appropriate event.
         _DragRegionClickedHandlers();
         break;
     }
-    case WM_MENUCHAR:
-    {
+    case WM_MENUCHAR: {
         // GH#891: return this LRESULT here to prevent the app from making a
         // bell when alt+key is pressed. A menu is active and the user presses a
         // key that does not correspond to any mnemonic or accelerator key,
         return MAKELRESULT(0, MNC_CLOSE);
     }
-    case WM_SIZING:
-    {
+    case WM_SIZING: {
         return _OnSizing(wparam, lparam);
     }
-    case WM_CLOSE:
-    {
+    case WM_CLOSE: {
         // If the user wants to close the app by clicking 'X' button,
         // we hand off the close experience to the app layer. If all the tabs
         // are closed, the window will be closed as well.
